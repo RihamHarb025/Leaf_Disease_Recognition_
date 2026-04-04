@@ -157,6 +157,63 @@ def calculate_severity(leaf_mask, disease_mask):
 
 
 # ---------------------------
+# phase 2: feature extraction
+# ---------------------------
+def extract_features(image, leaf_mask, disease_mask):
+    leaf_area = np.count_nonzero(leaf_mask)
+    disease_area = np.count_nonzero(disease_mask)
+
+    if leaf_area == 0:
+        severity = 0.0
+    else:
+        severity = (disease_area / leaf_area) * 100
+
+    # connected components on disease mask
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(disease_mask, connectivity=8)
+
+    # exclude background
+    num_spots = max(0, num_labels - 1)
+
+    largest_spot_area = 0
+    if num_labels > 1:
+        largest_spot_area = int(np.max(stats[1:, cv2.CC_STAT_AREA]))
+
+    # boolean masks
+    disease_pixels = disease_mask > 0
+    healthy_pixels = (leaf_mask > 0) & (disease_mask == 0)
+
+    # average RGB of diseased region
+    if np.any(disease_pixels):
+        diseased_mean_rgb = image[disease_pixels].mean(axis=0)
+        diseased_mean_r, diseased_mean_g, diseased_mean_b = diseased_mean_rgb
+    else:
+        diseased_mean_r, diseased_mean_g, diseased_mean_b = 0, 0, 0
+
+    # average RGB of healthy region
+    if np.any(healthy_pixels):
+        healthy_mean_rgb = image[healthy_pixels].mean(axis=0)
+        healthy_mean_r, healthy_mean_g, healthy_mean_b = healthy_mean_rgb
+    else:
+        healthy_mean_r, healthy_mean_g, healthy_mean_b = 0, 0, 0
+
+    features = {
+        "leaf_area": int(leaf_area),
+        "disease_area": int(disease_area),
+        "severity": float(severity),
+        "num_spots": int(num_spots),
+        "largest_spot_area": int(largest_spot_area),
+        "diseased_mean_r": float(diseased_mean_r),
+        "diseased_mean_g": float(diseased_mean_g),
+        "diseased_mean_b": float(diseased_mean_b),
+        "healthy_mean_r": float(healthy_mean_r),
+        "healthy_mean_g": float(healthy_mean_g),
+        "healthy_mean_b": float(healthy_mean_b),
+    }
+
+    return features
+
+
+# ---------------------------
 # visualization
 # ---------------------------
 def highlight_disease(image, disease_mask):
@@ -167,9 +224,9 @@ def highlight_disease(image, disease_mask):
 
 
 # ---------------------------
-# full phase 1 pipeline
+# full pipeline
 # ---------------------------
-def process_leaf_image_phase1(image):
+def process_leaf_image(image):
     processed = preprocess_image(image)
 
     leaf_mask = segment_leaf(processed)
@@ -183,6 +240,7 @@ def process_leaf_image_phase1(image):
     disease_regions = extract_regions(disease_mask)
 
     leaf_area, disease_area, severity = calculate_severity(leaf_mask, disease_mask)
+    features = extract_features(processed, leaf_mask, disease_mask)
     highlighted = highlight_disease(processed, disease_mask)
 
     return {
@@ -194,7 +252,8 @@ def process_leaf_image_phase1(image):
         "disease_regions": disease_regions,
         "leaf_area": leaf_area,
         "disease_area": disease_area,
-        "severity": severity
+        "severity": severity,
+        "features": features
     }
 
 
@@ -211,13 +270,20 @@ img_path = os.path.join(dataset_path, image_files[0])
 img = cv2.imread(img_path)
 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-result = process_leaf_image_phase1(img)
+result = process_leaf_image(img)
 
 print("Brightness:", round(check_brightness(img), 2))
 print("Contrast:", round(check_contrast(img), 2))
 print("Leaf area:", result["leaf_area"])
 print("Disease area:", result["disease_area"])
 print("Severity (%):", round(result["severity"], 2))
+
+print("\nExtracted Features:")
+for key, value in result["features"].items():
+    if isinstance(value, float):
+        print(f"{key}: {value:.2f}")
+    else:
+        print(f"{key}: {value}")
 
 plt.figure(figsize=(18, 10))
 
@@ -247,9 +313,11 @@ plt.title("Highlighted Disease")
 plt.axis("off")
 
 plt.subplot(2, 3, 6)
-plt.text(0.1, 0.7, f"Severity: {result['severity']:.2f}%", fontsize=18)
-plt.text(0.1, 0.5, f"Leaf area: {result['leaf_area']}", fontsize=14)
-plt.text(0.1, 0.3, f"Disease area: {result['disease_area']}", fontsize=14)
+plt.text(0.1, 0.75, f"Severity: {result['severity']:.2f}%", fontsize=18)
+plt.text(0.1, 0.55, f"Leaf area: {result['leaf_area']}", fontsize=13)
+plt.text(0.1, 0.40, f"Disease area: {result['disease_area']}", fontsize=13)
+plt.text(0.1, 0.25, f"Spots: {result['features']['num_spots']}", fontsize=13)
+plt.text(0.1, 0.10, f"Largest spot: {result['features']['largest_spot_area']}", fontsize=13)
 plt.axis("off")
 
 plt.tight_layout()
