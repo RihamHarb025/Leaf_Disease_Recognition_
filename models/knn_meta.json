@@ -1,0 +1,13 @@
+{
+  "k": 3,
+  "weights": "distance",
+  "n_samples": 20,
+  "classes": [
+    "chlorosis_yellowing",
+    "healthy",
+    "spot_necrotic",
+    "unknown_abnormality",
+    "dryness_dehydration"
+  ],
+  "train_accuracy": 1.0
+}

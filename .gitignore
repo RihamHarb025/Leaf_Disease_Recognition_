@@ -1,0 +1,6 @@
+dataset_imgs/
+__pycache__/
+*.zip
+*.pyc
+.streamlit/
+.pytest_cache/
